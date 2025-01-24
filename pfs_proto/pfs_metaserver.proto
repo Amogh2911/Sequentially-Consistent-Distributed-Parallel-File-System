@@ -1,0 +1,234 @@
+syntax = "proto3";
+
+// Proto file for metaserver-client connections
+
+package pfsmeta;
+
+service MetaServer {
+
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+    rpc ConnectToMetaserver(stream ConnectRequest) returns (stream ConnectResponse);
+
+    // New RPC for creating a file
+    rpc CreateFile(CreateFileRequest) returns (CreateFileResponse);
+
+     // New RPC for opening a file
+    rpc OpenFile(OpenFileRequest) returns (OpenFileResponse);
+
+    // RPC method for reading a file
+    rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
+
+    // Unary RPC for requesting a read/write token
+    rpc RequestToken(TokenRequest) returns (TokenResponse);
+
+    // Unary RPC to fetch cacheable blocks
+    rpc FetchCacheableBlocks(CacheableBlocksRequest) returns (CacheableBlocksResponse);
+
+    rpc Fstat(FstatRequest) returns (FstatResponse);
+
+    rpc UpdateMetadata(UpdateMetadataRequest) returns (UpdateMetadataResponse);
+
+    rpc ExecStatStream(ExecStatRequest) returns (ExecStatResponse);
+
+    // RPC to delete client tokens
+    rpc DeleteTokensForClient(DeleteClientTokensRequest) returns (DeleteClientTokensResponse);
+
+    // RPC to check if a file is open
+    rpc CheckClientsWithFile(CheckClientsWithFileRequest) returns (CheckClientsWithFileResponse);
+}
+
+message HealthCheckRequest {
+    string message = 1; // "ping"
+}
+
+message HealthCheckResponse {
+    string message = 1; // "pong"
+}
+
+message ConnectRequest {
+    string message = 1;     // Client message or revoke request message
+    int32 fd = 2;           // File descriptor for token request/revocation
+    int32 client_id = 3;    // Client ID
+    int64 start_offset = 4; // Start byte range
+    int64 end_offset = 5;   // End byte range
+    string token_type = 6;  // "read" or "write"
+    string filename = 7; 
+}
+
+message ConnectResponse {
+    string message = 1;     // Server response message
+    bool revoke_request = 2;// Flag to indicate if this is a revoke request
+    int32 fd = 3;           // File descriptor for revocation
+    int64 start_offset = 4; // Start byte range
+    int64 end_offset = 5;   // End byte range
+    int32 client_id = 6;       // Client ID that needs to handle this revoke request
+    string token_type = 7;     // "read" or "write"
+    string filename = 8;
+    bool invalidate_request = 9;
+    bool write_through_request = 10;
+}
+
+
+// Request message for creating a file
+message CreateFileRequest {
+  string filename = 1;
+  int32 stripe_width = 2;
+}
+
+// Response message for creating a file
+message CreateFileResponse {
+  int32 status = 1;      // 0 = success, -1 = failure
+  string message = 2;    // Error or success message
+}
+
+// Request for opening a file
+message OpenFileRequest {
+    string filename = 1;  // Name of the file to open
+    int32 mode = 2;       // Mode: 1 (read-only), 2 (read/write)
+}
+
+// Metadata associated with a file
+message FileMetadata {
+    string filename = 1;                  // Name of the file
+    uint64 file_size = 2;                 // File size
+    int64 ctime = 3;                      // Creation time
+    int64 mtime = 4;                      // Modification time
+    int32 mode = 5;                       // Mode: 1 (read-only), 2 (read/write)
+    FileRecipe recipe = 6;                // Recipe for file striping
+    int32 stripe_width = 7;
+}
+
+// Recipe for file striping
+message FileRecipe {
+    int32 stripe_width = 1;             // Number of servers in the stripe
+    map<int32, ServerChunks> server_map = 2; // Map of server_id to its list of chunks
+}
+
+// List of chunks on a server
+message ServerChunks {
+    repeated ChunkRange ranges = 1; // List of chunk ranges on this server
+}
+
+// A single chunk range on a server
+message ChunkRange {
+    int64 start_byte = 1; // Start byte of the range
+    int64 end_byte = 2;   // End byte of the range
+}
+
+// Response for opening a file
+message OpenFileResponse {
+    int32 status = 1;            // Status code: 0 (success), non-zero (failure)
+    string message = 2;          // Optional error message
+    int32 fd = 3;                // File descriptor assigned to the client
+    FileMetadata metadata = 4;   // Metadata of the opened file
+}
+
+// Read file request and response messages
+message ReadFileRequest {
+    int32 fd = 1;           // File descriptor
+    int64 start_offset = 2; // Start offset for the read operation
+    int64 num_bytes = 3;    // Number of bytes to read
+}
+
+message ReadFileResponse {
+    int32 status = 1;       // 0 = success, -1 = failure
+    string message = 2;     // Error or success message
+    string data = 3;        // Data read from the file
+}
+
+// TokenRequest message for requesting read/write tokens
+message TokenRequest {
+  int32 fd = 1;           // File descriptor
+  int32 client_id = 2;
+  int64 start_offset = 3;
+  int64 end_offset = 4;
+  string token_type = 5;  // "read" or "write"
+  int64 offset = 6;
+  bool no_cache = 7;
+}
+
+// TokenResponse message for responding to token requests
+message TokenResponse {
+  int32 status = 1;       // 0 = success, -1 = conflict
+  string message = 2;     // Additional response message
+  uint64 file_size = 3;
+  repeated int64 no_cache_blocks = 4; // List of block numbers that should not be cached
+}
+
+message CacheableBlocksRequest {
+    string filename = 1;
+    int64 start_offset = 2;
+    int64 end_offset = 3;
+    string token_type = 4;  // "read" or "write"
+    int32 client_id = 5; // Requesting client
+}
+
+message CacheableBlocksResponse {
+    int32 status = 1; // 0 = success, -1 = failure
+    string message = 2; // Optional error or success message
+    repeated int64 cacheable_blocks = 3; // List of block numbers that can be cached
+}
+
+// Request for fetching metadata
+message FstatRequest {
+    int32 fd = 1; // File descriptor
+}
+
+// Response for fetching metadata
+message FstatResponse {
+    int32 status = 1;            // Status code: 0 (success), non-zero (failure)
+    string message = 2;          // Optional error message
+    FileMetadata metadata = 3;   // Metadata of the file
+}
+
+
+message UpdateMetadataRequest {
+    string filename = 1; // Name of the file
+    int64 file_size = 2; // Updated file size
+    int64 mtime = 3; // Updated modified time
+    FileRecipe file_recipe = 4; // Updated file recipe
+}
+
+message UpdateMetadataResponse {
+    int32 status = 1; // 0 for success, -1 for failure
+    string message = 2;
+}
+
+message ExecStatRequest {
+    int32 client_id = 1;
+}
+
+message ExecStatResponse {
+    int32 status = 1;
+    int64 num_read_hits = 2;
+    int64 num_write_hits = 3;
+    int64 num_evictions = 4;
+    int64 num_writebacks = 5;
+    int64 num_invalidations = 6;
+}
+
+// Request message for deleting client tokens
+message DeleteClientTokensRequest {
+    int32 client_id = 1; // Client ID whose tokens are to be deleted
+    string filename = 2; // Name of the file
+    int32 fd = 3;
+}
+
+// Response message for deleting client tokens
+message DeleteClientTokensResponse {
+    int32 success = 1;      // 0 = success, -1 = failure
+    string message = 2;    // Error or success message
+}
+
+// Request message to check if a file is open
+message CheckClientsWithFileRequest {
+    string filename = 1;  // Name of the file
+    int32 client_id = 2;  // ID of the requesting client
+}
+
+// Response message to check if a file is open
+message CheckClientsWithFileResponse {
+    bool is_open = 1;     // True if the file is open by any other client
+    string message = 2;   // Additional information or error message
+}

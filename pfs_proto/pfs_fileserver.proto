@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package pfsfile;
+
+// Service definition for the PFS File Server
+service FileServer {
+    rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+    // Write data to a file
+    rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
+
+    rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
+
+    // RPC for deleting a file
+    rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
+
+}
+
+// Message for health check requests
+message HealthCheckRequest {
+    string message = 1; // Example: "ping"
+}
+
+// Message for health check responses
+message HealthCheckResponse {
+    string message = 1; // Example: "pong"
+}
+
+// Request for writing to a file
+message WriteFileRequest {
+    string filename = 1;        // Name of the file (relative to base directory)
+    int64 start_offset = 2;     // Offset to start writing
+    bytes data = 3;             // Data to write
+    int64 num_bytes = 4;        // No of bytes to write
+}
+
+// Response for writing to a file
+message WriteFileResponse {
+    int32 status = 1;           // Status code: 0 (success), non-zero (failure)
+    string message = 2;         // Optional message
+    int64 bytes_written = 3;    // Number of bytes successfully written
+}
+
+// ReadFile messages
+message ReadFileRequest {
+    string filename = 1;
+    int64 start_offset = 2;
+    int64 num_bytes = 3;
+    int32 mode = 4;
+}
+
+message ReadFileResponse {
+    int32 status = 1; // 0 = success, -1 = failure
+    string message = 2;
+    bytes data = 3; // Contains the block data
+}
+
+// Request message for deleting a file
+message DeleteFileRequest {
+    string filename = 1;      // Name of the file to delete
+}
+
+// Response message for deleting a file
+message DeleteFileResponse {
+    int32 status = 1;         // 0 = success, non-zero = error code
+    string message = 2;       // Error or success message
+}
